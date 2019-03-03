@@ -52,11 +52,14 @@ def main(yolo):
         ret, frame = video_capture.read()  # frame shape 640*480*3
         if ret != True:
             break;
-        t1 = time.time()
 
         image = Image.fromarray(frame)
+        t1 = time.time()
         boxs = yolo.detect_image(image)
        # print("box_num",len(boxs))
+        infer = (time.time()-t1)
+        print("infer= %f"%(infer))
+
         features = encoder(frame,boxs)
         
         # score to 1.0 here).
@@ -95,6 +98,8 @@ def main(yolo):
                     list_file.write(str(boxs[i][0]) + ' '+str(boxs[i][1]) + ' '+str(boxs[i][2]) + ' '+str(boxs[i][3]) + ' ')
             list_file.write('\n')
             
+        infer = (time.time()-t1)
+        print("infer= %f"%(infer))
         fps  = ( fps + (1./(time.time()-t1)) ) / 2
         print("fps= %f"%(fps))
         

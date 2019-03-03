@@ -13,7 +13,7 @@ from collections import defaultdict
 import numpy as np
 from keras import backend as K
 from keras.layers import (Conv2D, Input, ZeroPadding2D, Add,
-                          UpSampling2D, Concatenate)
+                          UpSampling2D, Concatenate, MaxPooling2D)
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
@@ -37,7 +37,7 @@ def unique_config_sections(config_file):
     Adds unique suffixes to config sections for compability with configparser.
     """
     section_counters = defaultdict(int)
-    output_stream = io.BytesIO() #io.StringIO()
+    output_stream = io.StringIO() #io.BytesIO() #io.StringIO()
     with open(config_file) as fin:
         for line in fin:
             if line.startswith('['):
@@ -214,6 +214,16 @@ def _main(args):
 
         elif section.startswith('net'):
             pass
+
+        elif section.startswith('maxpool'):
+            size = int(cfg_parser[section]['size'])
+            stride = int(cfg_parser[section]['stride'])
+            all_layers.append(
+                MaxPooling2D(
+                    padding='same',
+                    pool_size=(size, size),
+                    strides=(stride, stride))(prev_layer))
+            prev_layer = all_layers[-1]
 
         else:
             raise ValueError(
