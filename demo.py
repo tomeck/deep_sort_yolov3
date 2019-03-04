@@ -7,6 +7,7 @@ import os
 from timeit import time
 import warnings
 import sys
+import argparse
 import cv2
 import numpy as np
 from PIL import Image
@@ -26,7 +27,31 @@ def main(yolo):
     max_cosine_distance = 0.3
     nn_budget = None
     nms_max_overlap = 1.0
-    
+
+    # Cmd-line params    
+    parser = argparse.ArgumentParser(description='Object Detection using YOLO with DeepSort and Keras')
+    parser.add_argument('--image', help='Path to image file.')
+    parser.add_argument('--video', help='Path to video file.')
+    args = parser.parse_args()
+
+    if (args.image):
+        # Open the image file
+        if not os.path.isfile(args.image):
+            print("Input image file ", args.image, " doesn't exist")
+            sys.exit(1)
+        video_capture = cv2.VideoCapture(args.image)
+        outputFile = args.image[:-4]+'_yolo_out_py.jpg'
+    elif (args.video):
+        # Open the video file
+        if not os.path.isfile(args.video):
+            print("Input video file ", args.video, " doesn't exist")
+            sys.exit(1)
+        video_capture = cv2.VideoCapture(args.video)
+        outputFile = args.video[:-4]+'_yolo_out_py.avi'
+    else:
+        # Webcam input
+        video_capture = cv2.VideoCapture(0)
+
    # deep_sort 
     model_filename = 'model_data/mars-small128.pb'
     encoder = gdet.create_box_encoder(model_filename,batch_size=1)
@@ -36,7 +61,7 @@ def main(yolo):
 
     writeVideo_flag = True 
     
-    video_capture = cv2.VideoCapture(0)
+    #video_capture = cv2.VideoCapture(0)
 
     if writeVideo_flag:
     # Define the codec and create VideoWriter object
@@ -58,7 +83,7 @@ def main(yolo):
         boxs = yolo.detect_image(image)
        # print("box_num",len(boxs))
         infer = (time.time()-t1)
-        print("infer= %f"%(infer))
+        print("yolo infer= %f"%(infer))
 
         features = encoder(frame,boxs)
         
@@ -93,13 +118,16 @@ def main(yolo):
             out.write(frame)
             frame_index = frame_index + 1
             list_file.write(str(frame_index)+' ')
-            if len(boxs) != 0:
-                for i in range(0,len(boxs)):
-                    list_file.write(str(boxs[i][0]) + ' '+str(boxs[i][1]) + ' '+str(boxs[i][2]) + ' '+str(boxs[i][3]) + ' ')
+            for track in tracker.tracks:
+                log_str = "[id=" + str(track.track_id) +", state=" + str(track.state) + ", age=" + str(track.age) +", hits=" + str(track.hits) + ", frames since last update=" + str(track.time_since_update) + ']\t'
+                list_file.write( log_str )
+            # if len(boxs) != 0:
+            #     for i in range(0,len(boxs)):
+            #         list_file.write(str(boxs[i][0]) + ' '+str(boxs[i][1]) + ' '+str(boxs[i][2]) + ' '+str(boxs[i][3]) + ' ')
             list_file.write('\n')
             
         infer = (time.time()-t1)
-        print("infer= %f"%(infer))
+        print("total infer= %f"%(infer))    
         fps  = ( fps + (1./(time.time()-t1)) ) / 2
         print("fps= %f"%(fps))
         
