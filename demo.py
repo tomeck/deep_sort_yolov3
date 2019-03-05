@@ -40,14 +40,15 @@ def main(yolo):
             print("Input image file ", args.image, " doesn't exist")
             sys.exit(1)
         video_capture = cv2.VideoCapture(args.image)
-        outputFile = args.image[:-4]+'_yolo_out_py.jpg'
+        # outputFile = args.image[:-4]+'_yolo_out_py.jpg'
     elif (args.video):
         # Open the video file
         if not os.path.isfile(args.video):
             print("Input video file ", args.video, " doesn't exist")
             sys.exit(1)
         video_capture = cv2.VideoCapture(args.video)
-        outputFile = args.video[:-4]+'_yolo_out_py.avi'
+        video_fps = video_capture.get(cv2.CAP_PROP_FPS)
+        # outputFile = args.video[:-4]+'_yolo_out_py.avi'
     else:
         # Webcam input
         video_capture = cv2.VideoCapture(0)
@@ -60,26 +61,27 @@ def main(yolo):
     tracker = Tracker(metric)
 
     writeVideo_flag = True 
-    
-    #video_capture = cv2.VideoCapture(0)
+    frame_index = -1 
 
     if writeVideo_flag:
-    # Define the codec and create VideoWriter object
+        # Define the codec and create VideoWriter object
         w = int(video_capture.get(3))
         h = int(video_capture.get(4))
         fourcc = cv2.VideoWriter_fourcc(*'MJPG')
         out = cv2.VideoWriter('output.avi', fourcc, 15, (w, h))
-        list_file = open('detection.txt', 'w')
-        frame_index = -1 
         
+    track_stats = {}
     fps = 0.0
     while True:
         ret, frame = video_capture.read()  # frame shape 640*480*3
         if ret != True:
             break;
 
+        frame_index = frame_index + 1
+
         image = Image.fromarray(frame)
         t1 = time.time()
+        print("start yolo infer")
         boxs = yolo.detect_image(image)
        # print("box_num",len(boxs))
         infer = (time.time()-t1)
@@ -98,9 +100,15 @@ def main(yolo):
         
         # Call the tracker
         tracker.predict()
-        tracker.update(detections)
+        tracker.update(detections, frame_index)
         
         for track in tracker.tracks:
+            # update track stats
+            if track.is_confirmed():
+                #TODO find a more elegant/cheaper way to do this
+                # We're essentially storing info on every track ever confirmed
+                track_stats[track.track_id] = track
+
             if not track.is_confirmed() or track.time_since_update > 1:
                 continue 
             bbox = track.to_tlbr()
@@ -114,17 +122,17 @@ def main(yolo):
         cv2.imshow('', frame)
         
         if writeVideo_flag:
-            # save a frame
+            # save a frame to output video
             out.write(frame)
-            frame_index = frame_index + 1
-            list_file.write(str(frame_index)+' ')
-            for track in tracker.tracks:
-                log_str = "[id=" + str(track.track_id) +", state=" + str(track.state) + ", age=" + str(track.age) +", hits=" + str(track.hits) + ", frames since last update=" + str(track.time_since_update) + ']\t'
-                list_file.write( log_str )
-            # if len(boxs) != 0:
-            #     for i in range(0,len(boxs)):
-            #         list_file.write(str(boxs[i][0]) + ' '+str(boxs[i][1]) + ' '+str(boxs[i][2]) + ' '+str(boxs[i][3]) + ' ')
-            list_file.write('\n')
+
+            # list_file.write(str(frame_index)+' ')
+            # for track in tracker.tracks:
+            #     log_str = "[id=" + str(track.track_id) +", state=" + str(track.state) + ", age=" + str(track.age) +", hits=" + str(track.hits) + ", frames since last update=" + str(track.time_since_update) + ']\t'
+            #     list_file.write( log_str )
+            # # if len(boxs) != 0:
+            # #     for i in range(0,len(boxs)):
+            # #         list_file.write(str(boxs[i][0]) + ' '+str(boxs[i][1]) + ' '+str(boxs[i][2]) + ' '+str(boxs[i][3]) + ' ')
+            # list_file.write('\n')
             
         infer = (time.time()-t1)
         print("total infer= %f"%(infer))    
@@ -135,10 +143,19 @@ def main(yolo):
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    # Dump track statistics 
+    track_file = open('tracks.txt', 'w')
+    for track_id,track in track_stats.items():
+        track_file.write("#"+str(track_id)+"\t"+str(track.age)+" frames")
+        if(args.video):
+            track_file.write("\t"+str(round(track.age/video_fps))+" sec.")
+        track_file.write("\tstart frame "+str(track.first_frame)+"\tend frame "+str(track.first_frame+track.age))
+        track_file.write("\n")
+    track_file.close()
+
     video_capture.release()
     if writeVideo_flag:
         out.release()
-        list_file.close()
     cv2.destroyAllWindows()
 
 if __name__ == '__main__':
